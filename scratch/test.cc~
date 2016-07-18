@@ -1,0 +1,56 @@
+/*Time的使用测试脚本*/
+#include "ns3/nstime.h"
+#include "ns3/ev-app.h"
+#include "ns3/esdm-app.h"
+#include "ns3/agg-app.h"
+#include "ns3/ps-app.h"
+#include "ns3/pd-app.h"
+#include "ns3/simulator.h"
+#include "iostream"
+using namespace ns3;
+using namespace std;
+
+int main()
+{
+//	EvApp ev1(string("EV_1"));
+ // ev1.Initialize();
+	//ev1.TestApp();
+EsdmApp esdm1("ESDM_1");
+
+  AggApp agg1("AGG_1");
+ 
+  PsApp ps1("PS_1"),ps2("PS_2");
+
+  PdApp pd1("PD_1"),pd2("PD_2");
+
+  esdm1.InitSlaveTable("AGG","AGG_1");
+  esdm1.InitSlaveTable("PS","PS_1");
+  esdm1.InitSlaveTable("PS","PS_2");
+  esdm1.InitSlaveTable("PD","PD_1");
+  esdm1.InitSlaveTable("PD","PD_1");
+
+  agg1.InitRelationship("ESDM","ESDM_1");
+agg1.InitRelationship("PS","PS_1");
+agg1.InitRelationship("PS","PS_2");
+agg1.InitRelationship("PD","PD_1");
+agg1.InitRelationship("PD","PD_2");
+
+ps1.InitRelationship("AGG","AGG_1");
+ps2.InitRelationship("AGG","AGG_1");
+pd1.InitRelationship("AGG","AGG_1");
+pd2.InitRelationship("AGG","AGG_1");
+
+  esdm1.Initialize();
+  agg1.Initialize();
+  ps1.Initialize();
+  ps2.Initialize();
+  pd1.Initialize();
+  pd2.Initialize();
+  //EsdmApp::TestApp() add the event to the simulator
+  esdm1.TestApp();
+
+
+  Simulator::Run ();
+  Simulator::Destroy ();
+	return 0;
+}

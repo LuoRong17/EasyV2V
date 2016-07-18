@@ -1,0 +1,15 @@
+#include "ns3/v2g.h"
+#include "ns3/log.h"
+#include "ns3/ev-app.h"
+using namespace ns3;
+using namespace std;
+
+int main()
+{
+
+  LogComponentEnable ("V2gApp", LOG_LEVEL_FUNCTION);
+  Ptr<V2gApp> v2g_app1 = CreateObject<V2gApp>("APP_1");
+  cout << v2g_app1->GetAppId() << std::endl;
+  std::cout << "hello" << endl;
+  return 0;
+}

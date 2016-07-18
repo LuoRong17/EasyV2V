@@ -1,0 +1,29 @@
+#include "ns3/log.h"
+#include "ns3/linprog.h"
+using namespace std;
+using namespace ns3;
+
+NS_LOG_COMPONENT_DEFINE ("test-linprog");
+
+int main()
+{
+LogComponentEnable ("linprog", LOG_LEVEL_INFO);
+
+linprog test;
+PowerData data;
+cout << "test:" << sizeof(data) << endl;
+PriceData::PriceVec pdatavec;
+pdatavec.push_back(1.5);
+pdatavec.push_back(2.5);
+pdatavec.push_back(3.5);
+PriceData c_data(pdatavec);
+/*data = test.calculate(c_data,800,900,500,500);
+PowerData::PowerVec::iterator iter;
+for(iter = data.m_vec.begin();iter != data.m_vec.end();iter++)
+{
+	cout << *iter <<'\t';
+}
+cout <<endl;
+*/
+return 0;
+}

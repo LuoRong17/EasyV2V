@@ -1,0 +1,82 @@
+#include "mex.h"
+#include <iostream>
+#include "libmyFunc.h"
+/*void fill(double *pr, mwSize *pm, mwSize *pn, mwSize max )
+  {
+    mwSize i;  
+	     
+    *pm = max/2;
+    *pn = 1;
+    for (i=0; i < (*pm); i++) 
+    pr[i]=i*(4*3.14159/max);
+  }
+
+void mexFunction(int nlhs,mxArray *plhs[],int nrhs,mxArray *prhs[])
+{
+mwSize m, n, max=1000;
+mxArray *rhs[1], *lhs[1];
+(void) nlhs; (void) plhs;    
+(void) nrhs; (void) prhs;
+
+rhs[0] = mxCreateDoubleMatrix(max, 1, mxREAL);
+fill(mxGetPr(rhs[0]), &m, &n,1000);
+mxSetM(rhs[0], m);
+mxSetN(rhs[0], n);
+							       
+
+							      
+mexCallMATLAB(1, lhs, 1, rhs, "sin");
+mexCallMATLAB(0, NULL, 1, lhs, "plot");
+
+										     
+mxDestroyArray(rhs[0]);
+mxDestroyArray(lhs[0]);
+														      
+return;
+}*/
+
+using namespace std;  
+  
+int main() 
+{  
+ // initialize lib，这里必须做初始化！  
+    if( !libmyFuncInitialize())  
+    {  
+cout << "Could not initialize libmyFunc!" << endl;  
+       return -1;  
+    }  
+  
+    // 用户输入2个数值  
+    double a, b;  
+cout << "Please input 2 numbers <a b> and then press enter: " << endl;  
+    cin >> a;  
+    cin >> b;  
+  
+    double c; //used to receive the result  
+  
+    // 为变量分配内存空间, maltab只有一种变量，就是矩阵，为了和c++变量接轨，设置成1*1的矩阵  
+    mwArray mwA(1, 1, mxDOUBLE_CLASS); //1,1表示矩阵的大小, mxDOUBLE_CLASS表示变量的精度  
+    mwArray mwB(1, 1, mxDOUBLE_CLASS);  
+    mwArray mwC(1, 1, mxDOUBLE_CLASS);  
+  
+    // 调用类里面的SetData函数给类赋值  
+    mwA.SetData(&a, 1);  
+    mwB.SetData(&b, 1);  
+  
+    // 调用自己的函数，求和。  
+    myFunc(1, mwC, mwA, mwB);  
+  
+    c = mwC.Get(1, 1);  
+  
+cout << "The sum is: " << c << endl;  
+  
+    // 后面是一些终止调用的程序  
+    // terminate the lib  
+    libmyFuncTerminate();  
+  
+    // terminate MCR  
+    mclTerminateApplication();  
+  
+  
+    return EXIT_SUCCESS;  
+}  

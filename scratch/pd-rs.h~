@@ -1,0 +1,35 @@
+#ifndef PD_RS_H
+#define PD_RS_H
+
+#include "ns3/rs-base.h"
+#include "ns3/v2g.h"
+
+namespace ns3{
+
+class PdRs:public RsBase
+{
+public:
+static TypeId GetTypeId(void);
+PdRs();
+virtual ~PdRs();
+virtual void HandleEvent(const Ptr<EventMessage>& event_msg)const;
+virtual void HandlePacket(const Ptr<PacketMessage>& packet_msg)const;
+virtual void initThreshold();
+private:
+float m_powerLimit[24];
+float m_stationQuata[24];
+//threshold
+float m_thePowerForChargeOn;
+float m_thePowerForChargeOff;
+float m_thePowerForDischargeOn;
+float m_thePowerForDischargeOff;
+float m_thePowerValley;
+float m_thePowerPeak;
+
+void RRBSchedule();
+void ProcessElEvent(const Ptr<EventMessage>& event_msg);
+void ProcessLocalPeak();
+void ProcessLocalValley();
+};
+}//ns3
+#endif /*PD_RS_H*/

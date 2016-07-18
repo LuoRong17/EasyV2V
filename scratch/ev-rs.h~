@@ -1,0 +1,75 @@
+#ifndef EV_RS_H
+#define EV_RS_H
+
+#include "v2g.h"
+#include "rs-base.h"
+#include "ns3/simple-ref-count.h"
+namespace ns3{
+
+class ChargeRequestInfo:public SimpleRefCount<ChargeRequestInfo>
+{
+public:
+ChargeRequestInfo();
+int GetReservationMode();
+void ReadRequetInfo(int *mode,void *tempbuf);//Om call
+void MarkReadStatus();//mark read-status to read-already after Om's call
+bool GetReadStatus();
+void ClearReadStatus();
+virtual ~ChargeRequestInfo();
+bool WriteRequest();
+Ptr<PacketMessage> GetBuffer();
+private:
+int m_reservationMode;
+Ptr<PacketMessage> m_requestContent;//initialization time memory to store request content
+bool m_isRead;//alreay read or not
+};
+
+class ResultChoice:public SimpleRefCount<ResultChoice>
+{
+public:
+ResultChoice();
+void ReadListChoice(int *result_type,char *tempbuf);//Om call
+void MarkReadStatus();//mark read-status to read-already after Om's call
+virtual ~ResultChoice();
+bool WriteChoice(int index);
+bool GetReadStatus();
+void ClearReadStatus();
+Ptr<PacketMessage> GetBuffer();
+private:
+int m_itemIndex;//the choices' item of the rusults;0 indicate reject;-1 when initial
+Ptr<PacketMessage> m_optionContent;//initialization time memory to store option content;NULL when m_itemIndex=0
+bool m_isRead;
+};
+
+class EvRs:public RsBase
+{
+public:
+static TypeId GetTypeId(void);
+EvRs();
+EvRs(float thePowerDesire,float optimalChargePower);
+virtual ~EvRs();
+virtual void HandleEvent(const Ptr<EventMessage>& event_msg) const;
+virtual void HandlePacket(const Ptr<PacketMessage>& packet_msg)const;
+void ReadListChoice(int *result_type,char *tempbuf);//Om call
+void ReadRequetInfo(int *mode,void *tempbuf);//Om call
+virtual void initThreshold();
+private:
+float m_thePowerDesire;//Threshold
+float m_optimalChargePower;
+ResultChoice m_resultChoice;
+ChargeRequestInfo m_chargeRequestInfo;
+
+bool WhetherCharge(const Ptr<PacketMessage>& packet_msg);
+bool WhetherCharge(const Ptr<EventMessage>& event_msg);
+int ChargeScheduleResultOption(const Ptr<PacketMessage>& packet_msg);
+bool WhetherFeed();
+float GetOptimalChargePower();
+void ProcessChargeDemand(const Ptr<PacketMessage>& packet_msg);
+void ProcessChargeDemand(const Ptr<EventMessage>& event_msg);
+void ProcessScheduleResult(const Ptr<PacketMessage>& packet_msg);
+void ProcessPeakShaveRequest();
+void ProcessElEvent(const Ptr<ElEvent>& event_msg);
+};
+}//ns3
+
+#endif/* EV_RS_H */

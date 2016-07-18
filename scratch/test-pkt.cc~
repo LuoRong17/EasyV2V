@@ -1,0 +1,151 @@
+/* -*-  Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil; -*- */
+/*
+ * Copyright (c) 2011 Centre Tecnologic de Telecomunicacions de Catalunya (CTTC)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation;
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *
+ * Author: Jaume Nin <jaume.nin@cttc.cat>
+ */
+
+#include "ns3/lte-helper.h"
+#include "ns3/epc-helper.h"
+#include "ns3/core-module.h"
+#include "ns3/network-module.h"
+#include "ns3/ipv4-global-routing-helper.h"
+#include "ns3/internet-module.h"
+#include "ns3/mobility-module.h"
+#include "ns3/lte-module.h"
+#include "ns3/applications-module.h"
+#include "ns3/point-to-point-helper.h"
+#include "ns3/config-store.h"
+
+#include "ns3/ev-app.h"
+#include "ns3/esdm-app.h"
+#include "ns3/agg-app.h"
+#include "ns3/ps-app.h"
+
+
+ #include "ns3/ipv4-static-routing-helper.h"
+
+using namespace ns3;
+using namespace std;
+
+/**
+ * this file is use to check that whether ther SerializePayload() function 
+ * and DeSerializePayload() function work corectly
+ * every packet should pass this kind of test,
+ * to make sure the pkt can be encapsule and deencapsule correctly.
+ */
+
+NS_LOG_COMPONENT_DEFINE ("test-price-request-pkt");
+
+void printPriceData(const PriceMap& price_data)
+{
+   PriceMap::const_iterator iter = price_data.begin();
+  for(;iter != price_data.end(); ++ iter){
+    std::cout << iter->first << " list:" <<iter->second << std::endl;
+  }
+}
+
+void printChargeScheduleResult_2(const vector<Ptr<CSItemBase> >& result)
+{
+        vector<Ptr<CSItemBase> >::const_iterator iter = result.begin();
+        for (;iter != result.end(); iter++){
+        PowerData::PowerVec temp=(*iter)->m_powerScheduleResult.m_vec;
+        cout << "pspdid:" << (*iter)->m_pspdId << " interfaceid:" << (*iter)->m_interfaceId <<endl;
+        PowerData::PowerVec::const_iterator iiter = temp.begin();
+        for(;iiter != temp.end();iiter++)
+        {
+        cout << (*iiter) << endl;
+        }
+        }
+}
+
+int
+main (int argc, char *argv[])
+{
+
+Ptr<PacketMessage> ptr_message = Create<PacketMessage>();
+uint8_t * data_buff = new uint8_t [500];
+
+/*********************************part of AggPriceQueryResponsePkt**********************************************/
+  std::ifstream is;
+  is.open("price-test.txt");
+  if (!is) {
+    std::cout << "error: unable to open input file"  << std::endl;
+    return false;
+  }
+
+
+
+
+/*********************************part of AggPriceQueryResponsePkt**********************************************/
+  EvChargeRequestInfo info(0,1,1.1,2.3,Seconds(60),4.6,5.7,6.6,7.7,Vector2D(1.1,2.2),Vector2D(4.1,5.2));
+  EvChargeRequestPkt ev_pkt("AGG_1","EV_1",info);
+
+  EvChargeRequestInfo info1 = ev_pkt.GetRequestInfo();
+  cout << info1 << std::endl;
+
+  Ptr<Packet> final_pkt = ev_pkt.FormNs3Packet();
+  final_pkt->CopyData(data_buff,500);
+  ptr_message = PacketMessage::FormPacketMessage(data_buff);
+  Ptr<EvChargeRequestPkt> ptr_ev_message = Create<EvChargeRequestPkt>();
+  ptr_ev_message = DynamicCast<EvChargeRequestPkt>(ptr_message);
+  //Ptr<EvChargeRequestPkt> ptr_ev_message = DynamicCast<EvChargeRequestPkt>(ptr_message);
+  if(ptr_ev_message == 0)
+    cout << "ev_message ptr Null" << endl;
+  info1 = ptr_ev_message->GetRequestInfo();
+  cout << info1 << endl;
+  //////////////////////////////////////////////////////////////////////
+
+ /*****part of AggChargeScheduleResultPkt*************/
+
+ScheduleResultData sitem1;
+memcpy(sitem1.m_pspdId,"PD_1",5);
+memcpy(sitem1.m_interfaceId,"INT_1",6);
+sitem1.m_powerScheduleResult.addPower(100);
+sitem1.m_powerScheduleResult.addPower(300);
+ScheduleResultData sitem2;
+memcpy(sitem2.m_pspdId,"PD_2",5);
+memcpy(sitem2.m_interfaceId,"INT_2",6);
+sitem2.m_powerScheduleResult.addPower(200);
+sitem2.m_powerScheduleResult.addPower(400);
+sitem2.m_location=Vector2D(1.1,2.2);
+sitem2.m_chargePrice=1.0;
+sitem2.m_appointStartTime=Seconds(60).GetMinutes(); 
+sitem2.m_toleranceTime=Seconds(60).GetMinutes(); 
+  Ptr<CSItemBase> item1 = Create<CSItemBase>(&sitem1);
+  Ptr<CSItemBase> item2 = Create<CSItemBase>(&sitem2);
+  std::vector<Ptr<CSItemBase> > scheduleResult;
+  scheduleResult.push_back(item1);
+  scheduleResult.push_back(item2);
+
+ AggChargeScheduleResultPkt aggCSRpkt("EV_1","AGG_1",scheduleResult);
+  scheduleResult = aggCSRpkt.GetScheduleResult();
+  printChargeScheduleResult_2(scheduleResult);
+
+  final_pkt = aggCSRpkt.FormNs3Packet();
+  final_pkt->CopyData(data_buff,500);
+  ptr_message = PacketMessage::FormPacketMessage(data_buff);
+  Ptr<AggChargeScheduleResultPkt> ptr_agg_csr_message = Create<AggChargeScheduleResultPkt>();
+  ptr_agg_csr_message = DynamicCast<AggChargeScheduleResultPkt>(ptr_message);
+  if(ptr_agg_csr_message == 0)
+    cout << "agg_csr_message ptr  Null" << endl;
+ scheduleResult = ptr_agg_csr_message->GetScheduleResult();
+  printChargeScheduleResult_2(scheduleResult);
+
+  return 0;
+
+}
+

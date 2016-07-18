@@ -1,0 +1,268 @@
+#include "ns3/ev-rs.h"
+#include "ns3/log.h"
+#include <iostream>
+
+namespace ns3{
+
+NS_LOG_COMPONENT_DEFINE("EvRs");
+NS_OBJECT_ENSURE_REGISTERED(EvRs);
+
+TypeId EvRs::GetTypeId(void)
+{
+static TypeId tid = TypeId("v2g::EvRs");
+tid.SetParent<RsBase>();
+tid.SetGroupName("V2G");
+return tid;
+}
+
+/*part of Class ChargeRequestInfo*/
+ChargeRequestInfo::ChargeRequestInfo():m_reservationMode(0),m_requestContent(NULL),m_isRead(true){}
+
+int ChargeRequestInfo::GetReservationMode()
+{
+return m_reservationMode;
+}
+
+void ChargeRequestInfo::ReadRequetInfo(int *mode,void *tempbuf)
+{
+//not done
+}
+
+void ChargeRequestInfo::MarkReadStatus()
+{
+m_isRead = true;
+}
+
+bool ChargeRequestInfo::GetReadStatus()
+{
+return m_isRead;
+}
+
+Ptr<PacketMessage> ChargeRequestInfo::GetBuffer()
+{
+return m_requestContent;
+}
+
+void ChargeRequestInfo::ClearReadStatus()
+{
+m_isRead = false;
+}
+
+bool ChargeRequestInfo::WriteRequest()
+{
+//not done
+ClearReadStatus();
+m_reservationMode = 1;
+m_requestContent = Create<PacketMessage>(4);
+return true;
+}
+
+ChargeRequestInfo::~ChargeRequestInfo(){}
+
+/*part of Class ResultChoice*/
+ResultChoice::ResultChoice():m_itemIndex(-1),m_optionContent(NULL),m_isRead(true){}
+
+void ResultChoice::ReadListChoice(int *result_type,char *tempbuf)
+{
+//not done
+}
+
+void ResultChoice::MarkReadStatus()
+{
+m_isRead = true;
+}
+
+bool ResultChoice::GetReadStatus()
+{
+return m_isRead;
+}
+
+void ResultChoice::ClearReadStatus()
+{
+m_isRead = false;
+}
+
+Ptr<PacketMessage> ResultChoice::GetBuffer()
+{
+return m_optionContent;
+}
+
+bool ResultChoice::WriteChoice(int index)
+{
+//not done
+m_itemIndex = index;
+ClearReadStatus();
+m_optionContent = Create<PacketMessage>(5);
+return true;
+}
+
+ResultChoice::~ResultChoice(){}
+
+/*part of EvRs*/
+EvRs::EvRs():m_thePowerDesire(0.1),m_optimalChargePower(0.0),m_resultChoice(),m_chargeRequestInfo()
+{
+initThreshold();
+}
+
+EvRs::EvRs(float thePowerDesire,float optimalChargePower):m_thePowerDesire(thePowerDesire),m_optimalChargePower(optimalChargePower),m_resultChoice(),m_chargeRequestInfo()
+{
+initThreshold();
+}
+
+void EvRs::HandleEvent(const Ptr<EventMessage>& event_msg)const
+{
+//not done
+switch(event_msg->GetType())
+{
+	case EV_EL_EVENT:
+	ProcessElEvent(DynamicCast<ElEvent>(event_msg));
+	break;
+	case EV_ALMC_SUBJECTIVECHARGE:
+	ProcessChargeDemand(event_msg);
+	break;
+	default:
+	break;
+}
+}
+
+void EvRs::HandlePacket(const Ptr<PacketMessage>& packet_msg)const
+{
+//not done
+switch(packet_msg->GetPacketType())
+{
+	case AGG_PEAK_SHAVING_REQUEST_PACKET:
+	ProcessPeakShaveRequest();
+	break;
+	case AGG_PRICE_RESPONSE_PACKET: 
+	ProcessChargeDemand(packet_msg);
+	break;
+	case AGG_FAST_CHARGE_RESULT_SCHEDUEL_PACKET:
+	ProcessScheduleResult(packet_msg);
+	break;
+	default:
+	break;
+}
+}
+
+void EvRs::initThreshold()
+{
+ThresholdInfo thresholdInfo;
+thresholdInfo.SetThreshold(7,m_thePowerDesire,false);
+m_thresholdVector.push_back(thresholdInfo);
+}
+
+void EvRs::ReadListChoice(int *result_type,char *tempbuf)
+{
+m_resultChoice.ReadListChoice(result_type,tempbuf);
+m_resultChoice.MarkReadStatus();
+}
+
+void EvRs::ReadRequetInfo(int *mode,void *tempbuf)
+{
+m_chargeRequestInfo.ReadRequetInfo(mode,tempbuf);
+m_chargeRequestInfo.MarkReadStatus();
+}
+
+bool EvRs::WhetherCharge(const Ptr<PacketMessage>& packet_msg)
+{
+//not done
+return true;
+}
+
+bool EvRs::WhetherCharge(const Ptr<EventMessage>& event_msg)
+{
+//not done
+return true;
+}
+
+int EvRs::ChargeScheduleResultOption(const Ptr<PacketMessage>& packet_msg)
+{
+//not done
+return 1;
+}
+
+bool EvRs::WhetherFeed()
+{
+//not done
+return false;
+}
+
+float EvRs::GetOptimalChargePower()
+{
+//not done
+return 0.0;
+}
+
+void EvRs::ProcessChargeDemand(const Ptr<PacketMessage>& packet_msg)
+{
+//not done
+if(WhetherCharge(packet_msg))
+{
+	if(!m_chargeRequestInfo.GetReadStatus())
+	{
+   	NS_LOG_ERROR("Rs-Om data synchronous abnormal");
+	}
+	m_chargeRequestInfo.WriteRequest();
+	//send packet
+	//almc::Send(m_chargeRequestInfo.GetBuffer());
+}
+else
+{
+	std::cout<< "WhetherCharge:false" << std::endl;
+}
+}
+
+void EvRs::ProcessChargeDemand(const Ptr<EventMessage>& event_msg)
+{
+//not done
+if(WhetherCharge(event_msg))
+{
+	if(!m_chargeRequestInfo.GetReadStatus())
+	{
+	NS_LOG_ERROR("Rs-Om data synchronous abnormal");
+	}
+	m_chargeRequestInfo.WriteRequest();
+	//send packet
+	//almc::Send(m_chargeRequestInfo.GetBuffer());
+}
+else
+{
+	std::cout<< "WhetherCharge:false" << std::endl;
+}
+}
+
+void EvRs::ProcessScheduleResult(const Ptr<PacketMessage>& packet_msg)
+{
+//not done
+int result;
+result = ChargeScheduleResultOption(packet_msg);
+if(result == 0)
+{
+//create pakect EV_FAST_CHARGE_RESPONSE
+}
+else
+{
+	if(!m_resultChoice.GetReadStatus())
+	{
+	NS_LOG_ERROR("Rs-Om data synchronous abnormal");
+	}
+	m_resultChoice.WriteChoice(result);
+	//send packet
+	//almc::Send(m_resultChoice.GetBuffer());
+}
+}
+
+void EvRs::ProcessPeakShaveRequest()
+{
+//not done
+}
+
+void EvRs::ProcessElEvent(const Ptr<ElEvent>& event_msg)
+{
+//not done
+ProcessChargeDemand(DynamicCast<EventMessage>(event_msg));
+}
+
+EvRs::~EvRs(){}
+
+}//ns3

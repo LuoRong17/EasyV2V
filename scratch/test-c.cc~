@@ -1,0 +1,300 @@
+/* -*-  Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil; -*- */
+/*
+ * Copyright (c) 2011 Centre Tecnologic de Telecomunicacions de Catalunya (CTTC)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation;
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *
+ * Author: Jaume Nin <jaume.nin@cttc.cat>
+ */
+
+#include "ns3/lte-helper.h"
+#include "ns3/epc-helper.h"
+#include "ns3/core-module.h"
+#include "ns3/network-module.h"
+#include "ns3/ipv4-global-routing-helper.h"
+#include "ns3/internet-module.h"
+#include "ns3/mobility-module.h"
+#include "ns3/lte-module.h"
+#include "ns3/applications-module.h"
+#include "ns3/point-to-point-helper.h"
+#include "ns3/config-store.h"
+
+#include "ns3/ev-app.h"
+#include "ns3/esdm-app.h"
+#include "ns3/agg-app.h"
+#include "ns3/ps-app.h"
+//#include "ns3/gtk-config-store.h"
+ #include "ns3/ipv4-static-routing-helper.h"
+
+#include "ns3/config-helper.h"
+#include "ns3/v2g-helper.h"
+
+using namespace ns3;
+using namespace std;
+/**
+ * Sample simulation script for LTE+EPC. It instantiates several eNodeB,
+ * attaches one UE per eNodeB starts a flow for each UE to  and from a remote host.
+ * It also  starts yet another flow between each UE pair.
+ */
+
+NS_LOG_COMPONENT_DEFINE ("EpcFirstExample");
+
+int
+main (int argc, char *argv[])
+{
+  {
+    // LogComponentEnable ("EvAlmc", LOG_LEVEL_FUNCTION);
+    // LogComponentEnable ("EvApp", LOG_LEVEL_FUNCTION);
+  LogComponentEnable ("EvAlmc", LOG_LEVEL_INFO);
+  LogComponentEnable ("EsdmAlmc", LOG_LEVEL_INFO);
+  LogComponentEnable ("AggAlmc", LOG_LEVEL_INFO);
+  LogComponentEnable ("PdAlmc", LOG_LEVEL_INFO);
+  LogComponentEnable ("PsAlmc", LOG_LEVEL_INFO);
+  LogComponentEnable ("EsdmComServer", LOG_LEVEL_DEBUG);
+  LogComponentEnable ("AggComServer", LOG_LEVEL_DEBUG);
+  LogComponentEnable ("EvComServer", LOG_LEVEL_DEBUG);
+  LogComponentEnable ("PsComServer", LOG_LEVEL_DEBUG);
+  LogComponentEnable ("PdComServer", LOG_LEVEL_DEBUG);
+  LogComponentEnable ("AggRs", LOG_LEVEL_INFO);
+
+
+  //LogComponentEnable ("EsdmPrice", LOG_LEVEL_FUNCTION);
+  //LogComponentEnable ("EsdmRs", LOG_LEVEL_DEBUG);
+  uint16_t numberOfNodes = 6;
+  double simTime = 10.0;
+  double distance = 60.0;
+  double interPacketInterval = 100;
+
+  // Command line arguments
+  CommandLine cmd;
+  cmd.AddValue("numberOfNodes", "Number of eNodeBs + UE pairs", numberOfNodes);
+  cmd.AddValue("simTime", "Total duration of the simulation [s])", simTime);
+  cmd.AddValue("distance", "Distance between eNBs [m]", distance);
+  cmd.AddValue("interPacketInterval", "Inter packet interval [ms])", interPacketInterval);
+  cmd.Parse(argc, argv);
+
+  Ptr<LteHelper> lteHelper = CreateObject<LteHelper> ();
+  Ptr<PointToPointEpcHelper>  epcHelper = CreateObject<PointToPointEpcHelper> ();
+  lteHelper->SetEpcHelper (epcHelper);
+
+  ConfigStore inputConfig;
+  inputConfig.ConfigureDefaults();
+
+  // Parse again so you can override default values from the command line
+  cmd.Parse(argc, argv);
+
+  Ptr<Node> pgw = epcHelper->GetPgwNode ();
+
+  // Create two RemoteHost, one[0] is agg, the other[1] is esdm.
+  NodeContainer remoteHostContainer;
+  remoteHostContainer.Create (2);
+  Ptr<Node> AggHost = remoteHostContainer.Get (0);
+  Ptr<Node> EsdmHost = remoteHostContainer.Get(1);
+  InternetStackHelper internet;
+  internet.Install (remoteHostContainer);
+
+  // Create the Internet
+  PointToPointHelper p2ph;
+  p2ph.SetDeviceAttribute ("DataRate", DataRateValue (DataRate ("100Gb/s")));
+  p2ph.SetDeviceAttribute ("Mtu", UintegerValue (1500));
+  p2ph.SetChannelAttribute ("Delay", TimeValue (Seconds (0.010)));
+
+  // Config RemoteHost
+  NetDeviceContainer lteP2pDevices = p2ph.Install (pgw, AggHost);
+  Ipv4AddressHelper ipv4h;
+  ipv4h.SetBase ("1.0.0.0", "255.0.0.0");
+  Ipv4InterfaceContainer lteP2pInterfaces = ipv4h.Assign (lteP2pDevices);
+
+  NetDeviceContainer hostP2pDevices = p2ph.Install(AggHost,EsdmHost);
+  ipv4h.SetBase ("3.0.0.0", "255.0.0.0");
+  Ipv4InterfaceContainer hostP2pInterfaces = ipv4h.Assign( hostP2pDevices);
+
+  // Get the address of agg and esdm.
+  Ipv4Address AggHostAddr = lteP2pInterfaces.GetAddress (1);
+  Ipv4Address EsdmHostAddr = hostP2pInterfaces.GetAddress(1);
+
+  Ipv4StaticRoutingHelper ipv4RoutingHelper;
+   Ptr<Ipv4StaticRouting> remoteHostStaticRouting = ipv4RoutingHelper.GetStaticRouting (AggHost->GetObject<Ipv4> ());
+  remoteHostStaticRouting->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
+
+  // Create lte nodes, there are 1 enbNodes and 5 ueNodes. UeNodes are consisted of 2 PdsNodes[0-1] and 3 EvNodes[2-4].
+  NodeContainer ueNodes;
+  NodeContainer enbNodes;
+  enbNodes.Create(numberOfNodes-5);
+  ueNodes.Create(numberOfNodes-1);
+
+  // Install Mobility Model
+  Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
+  positionAlloc->Add (Vector(distance, 0, 0));
+  positionAlloc->Add (Vector(-50, 1000, 0));      // ps in left-top corner
+  positionAlloc->Add (Vector(2000, -50, 0));      // ps in right-down corner
+
+  MobilityHelper mobility;
+  mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+  mobility.SetPositionAllocator(positionAlloc);
+  mobility.Install(enbNodes);
+  for(uint32_t u=0; u<2; u++){
+    mobility.Install(ueNodes.Get(u) );
+  }
+
+  MobilityHelper evmobility;
+  evmobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+  mobility.SetPositionAllocator(positionAlloc);
+  for(uint32_t u=2; u<ueNodes.GetN(); u++){
+    evmobility.Install(ueNodes.Get(u) );
+  }
+
+
+  // Install LTE Devices to the nodes
+  NetDeviceContainer enbLteDevs = lteHelper->InstallEnbDevice (enbNodes);
+  NetDeviceContainer ueLteDevs = lteHelper->InstallUeDevice (ueNodes);
+
+  // Install the IP stack on the UEs
+  internet.Install (ueNodes);
+  Ipv4InterfaceContainer ueIpIface;
+  ueIpIface = epcHelper->AssignUeIpv4Address (NetDeviceContainer (ueLteDevs));
+
+  // Assign IP address to UEs, and install applications
+  for (uint32_t u = 0; u < ueNodes.GetN (); ++u)
+  {
+    Ptr<Node> ueNode = ueNodes.Get (u);
+    // Set the default gateway for the UE
+    Ptr<Ipv4StaticRouting> ueStaticRouting = ipv4RoutingHelper.GetStaticRouting (ueNode->GetObject<Ipv4> ());
+    ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
+  }
+
+  // Attach one UE per eNodeB
+  for (uint16_t i = 0; i < ueNodes.GetN(); i++)
+  {
+    lteHelper->Attach (ueLteDevs.Get(i), enbLteDevs.Get(0));
+  // side effect: the default EPS bearer will be activated
+  }
+
+
+  // Install and start applications on UEs and remote host
+  // uint16_t v2gPort = 1234;
+  ApplicationContainer v2gApps;
+  // vector<Ptr<EsdmApp> > vecEsdmApp;
+  std::vector<Ptr<EsdmApp> > VecEsdmApp;
+  std::vector<Ptr<AggApp> > VecAggApp;
+  std::vector<Ptr<PsApp> > VecPsApp;
+  std::vector<Ptr<EvApp> > VecEvApp;
+
+
+  Ptr<EsdmApp> esdmApp = CreateObject<EsdmApp>("ESDM_1");
+  Ptr<AggApp> aggApp = CreateObject<AggApp>("AGG_1");
+  Ptr<PsApp> psApp1 = CreateObject<PsApp>("PS_1");
+  Ptr<PsApp> psApp2 = CreateObject<PsApp>("PS_2");
+  Ptr<EvApp> evApp1 = CreateObject<EvApp>("EV_1");
+  Ptr<EvApp> evApp2 = CreateObject<EvApp>("EV_2");
+  Ptr<EvApp> evApp3 = CreateObject<EvApp>("EV_3");
+
+  v2gApps.Add(esdmApp);
+  v2gApps.Add(aggApp);
+  v2gApps.Add(psApp1);
+  v2gApps.Add(evApp1);
+  v2gApps.Add(evApp2);
+  v2gApps.Add(evApp3);
+
+  VecEsdmApp.push_back(esdmApp);
+  VecAggApp.push_back(aggApp);
+  VecPsApp.push_back(psApp1);
+  VecPsApp.push_back(psApp2);
+  VecEvApp.push_back(evApp1);
+  VecEvApp.push_back(evApp2);
+  VecEvApp.push_back(evApp3);
+  //init................
+  for(vector<Ptr<EsdmApp> >::iterator it  = VecEsdmApp.begin();it != VecEsdmApp.end(); it++)  
+  {  
+   (*it)->Init(); 
+  //   (*it)->TestApp();
+  } 
+
+  for(vector<Ptr<AggApp> >::iterator it  = VecAggApp.begin();it != VecAggApp.end(); it++)  
+  {  
+   (*it)->Init(); 
+  } 
+
+  for(vector<Ptr<PsApp> >::iterator it  = VecPsApp.begin();it != VecPsApp.end(); it++)  
+  {  
+    (*it)->Init(); 
+  } 
+
+  for(vector<Ptr<EvApp> >::iterator it  = VecEvApp.begin();it != VecEvApp.end(); it++)  
+  {  
+    (*it)->Init(); 
+  } 
+
+
+  aggApp->SetNode(AggHost);
+  aggApp->InitLocalAdd(InetSocketAddress(AggHostAddr, V2G_PORT));
+  AggHost->AddApplication(aggApp);
+  esdmApp->SetNode(EsdmHost);
+  esdmApp->InitLocalAdd(InetSocketAddress(EsdmHostAddr, V2G_PORT));
+  EsdmHost->AddApplication(esdmApp);
+  psApp1->SetNode(ueNodes.Get(0));
+  psApp1->InitLocalAdd(InetSocketAddress(ueIpIface.GetAddress(0), V2G_PORT));
+  ueNodes.Get(0)->AddApplication(psApp1);
+  psApp2->SetNode(ueNodes.Get(1));
+  psApp2->InitLocalAdd(InetSocketAddress(ueIpIface.GetAddress(1), V2G_PORT));
+  ueNodes.Get(1)->AddApplication(psApp2);
+  evApp1->SetNode(ueNodes.Get(2));
+  evApp1->InitLocalAdd(InetSocketAddress(ueIpIface.GetAddress(2), V2G_PORT));
+  ueNodes.Get(2)->AddApplication(evApp1);
+  evApp2->SetNode(ueNodes.Get(3));
+  evApp2->InitLocalAdd(InetSocketAddress(ueIpIface.GetAddress(3), V2G_PORT));
+  ueNodes.Get(3)->AddApplication(evApp2);
+  evApp3->SetNode(ueNodes.Get(4));
+  evApp3->InitLocalAdd(InetSocketAddress(ueIpIface.GetAddress(4), V2G_PORT));
+  ueNodes.Get(4)->AddApplication(evApp3);
+
+
+  EvChargeRequestInfo info(0,1,1.1,2.3,Seconds(60),4.6,5.7,6.6,7.7,Vector2D(1.1,2.2),Vector2D(4.1,5.2));
+  Ptr<EvChargeRequestPkt> ptr_ev_pkt = Create<EvChargeRequestPkt>("AGG_1","EV_1",info);
+
+
+  VecEvApp[0]->TestSend(Seconds (2.2),"AGG_1",ptr_ev_pkt);
+  VecEvApp[0]->TestSend(Seconds (2.3),"ESDM_1",ptr_ev_pkt);
+  VecEvApp[0]->TestSend(Seconds (2.4),"PS_1",ptr_ev_pkt);
+  VecEvApp[0]->TestSend(Seconds (2.4),"PS_2",ptr_ev_pkt);
+  VecEvApp[0]->TestSend(Seconds (2.45),"EV_2",ptr_ev_pkt);
+  VecEvApp[0]->TestSend(Seconds (2.5),"EV_3",ptr_ev_pkt);
+
+  ///////////////////////////////
+Ptr<CSItemBase> item1 = Create<CSItemBase>("PD_1","INT_1",Vector2D(1.1,2.2),1.0,1.0,1.0,Seconds(60));
+  Ptr<CSItemBase> item2 = Create<CSItemBase>("PD_2","INT_2",Vector2D(2.2,1.1),1.0,1.0,1.0,Seconds(50));
+  std::vector<Ptr<CSItemBase> > scheduleResult;
+  scheduleResult.push_back(item1);
+  scheduleResult.push_back(item2);
+
+Ptr<AggChargeScheduleResultPkt> ptr_agg_pkt = Create<AggChargeScheduleResultPkt>("EV_1","AGG_1",scheduleResult);
+aggApp->TestSend(Seconds (2.6),"EV_1",ptr_agg_pkt);
+//////////////////////////
+  v2gApps.Start(Time(0.1));
+  lteHelper->EnableTraces ();
+  // Uncomment to enable PCAP tracing
+  //p2ph.EnablePcapAll("lena-epc-first");
+
+  Simulator::Stop(Seconds(simTime));
+  Simulator::Run();
+
+  /*GtkConfigStore config;
+  config.ConfigureAttributes();*/
+
+  Simulator::Destroy();
+  }
+//return 0;
+exit(0);
+}
+

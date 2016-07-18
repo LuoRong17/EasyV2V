@@ -1,0 +1,35 @@
+#ifndef PS_RS_H
+#define PS_RS_H
+
+#include "medol/rs-base.h"
+#include "medol/v2g.h"
+
+namespace ns3{
+
+class PsRs:public RsBase
+{
+public:
+static TypeId GetTypeId(void);
+PsRs();
+virtual ~PsRs();
+virtual void HandleEvent(const Ptr<EventMessage>& event_msg)const;
+virtual void HandlePacket(const Ptr<PacketMessage>& packet_msg)const;
+virtual void initThreshold();
+private:
+float m_powerLimit[24];
+float m_stationQuata[24];
+//threshold
+float m_thePowerForChargeOn;
+float m_thePowerForChargeOff;
+float m_thePowerForDischargeOn;
+float m_thePowerForDischargeOff;
+float m_thePowerValley;
+float m_thePowerPeak;
+
+void RRBSchedule();
+void ProcessElEvent(const Ptr<EventMessage>& event_msg);
+void ProcessLocalPeak();
+void ProcessLocalValley();
+};
+}//ns3
+#endif /*PS_RS_H*/

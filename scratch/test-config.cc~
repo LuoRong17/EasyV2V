@@ -1,0 +1,141 @@
+/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation;
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
+
+
+#include "ns3/core-module.h"
+#include "ns3/network-module.h"
+#include "ns3/internet-module.h"
+#include "ns3/point-to-point-module.h"
+#include "ns3/applications-module.h"
+#include "ns3/ev-app.h"
+#include "ns3/nstime.h"
+#include "rapidxml/rapidxml.hpp"
+#include "rapidxml/rapidxml_utils.hpp"
+#include "rapidxml/rapidxml_print.hpp"
+#include "string.h"
+#include "ns3/command-line.h"
+#include "ns3/esdm-app.h"
+#include "ns3/agg-app.h"
+#include "ns3/ps-app.h"
+#include "ns3/pd-app.h"
+#include "ns3/config-helper.h"
+#include "ns3/v2g-helper.h"
+
+#include <vector>
+using namespace ns3;
+using namespace std;
+using namespace rapidxml;
+
+int
+main (int argc, char *argv[])
+{
+  LogComponentEnable ("EvAlmc", LOG_LEVEL_INFO);
+  LogComponentEnable ("AggAlmc", LOG_LEVEL_INFO);
+  LogComponentEnable ("ConfigHelper", LOG_LEVEL_DEBUG);
+  LogComponentEnable ("EsdmComServer", LOG_LEVEL_DEBUG);
+  LogComponentEnable ("AggComServer", LOG_LEVEL_DEBUG);
+  LogComponentEnable ("EvComServer", LOG_LEVEL_DEBUG);
+  LogComponentEnable ("PsComServer", LOG_LEVEL_DEBUG);
+  LogComponentEnable ("PdComServer", LOG_LEVEL_DEBUG);
+  LogComponentEnable ("EvEl", LOG_LEVEL_DEBUG);
+
+  string file_name = "testXml.xml";
+  CommandLine cmd;
+  cmd.AddValue("doc","config document",file_name);
+  cmd.Parse(argc,argv);
+
+  Time::SetResolution (Time::NS);
+  vector<Ptr<EsdmApp> > vecEsdmApp;
+  vector<Ptr<AggApp> > vecAggApp;
+  vector<Ptr<PsApp> > vecPsApp;
+  vector<Ptr<PdApp> > vecPdApp;
+  vector<Ptr<EvApp> > VecEvApp;
+
+  ConfigHelper testConfigHelper; testConfigHelper.config(VecEvApp,vecEsdmApp,vecAggApp,vecPsApp,vecPdApp,file_name);
+
+  for(vector<Ptr<EsdmApp> >::iterator it  = vecEsdmApp.begin();it != vecEsdmApp.end(); it++)  
+    {  
+                   (*it)->Init(); 
+          } 
+
+  for(vector<Ptr<AggApp> >::iterator it  = vecAggApp.begin();it != vecAggApp.end(); it++)  
+    {  
+                   (*it)->Init(); 
+          } 
+
+  for(vector<Ptr<PsApp> >::iterator it  = vecPsApp.begin();it != vecPsApp.end(); it++)  
+    {  
+                   (*it)->Init(); 
+          } 
+
+  for(vector<Ptr<PdApp> >::iterator it  = vecPdApp.begin();it != vecPdApp.end(); it++)  
+    {  
+                   (*it)->Init(); 
+          } 
+  for(vector<Ptr<EvApp> >::iterator it  = VecEvApp.begin();it != VecEvApp.end(); it++)  
+    {  
+                   (*it)->Init(); 
+          }
+  NodeContainer nodes;
+  nodes.Create (2);
+
+  PointToPointHelper pointToPoint;
+  pointToPoint.SetDeviceAttribute ("DataRate", StringValue ("5Mbps"));
+  pointToPoint.SetChannelAttribute ("Delay", StringValue ("2ms"));
+
+  NetDeviceContainer devices;
+  devices = pointToPoint.Install (nodes);
+
+  InternetStackHelper stack;
+  stack.Install (nodes);
+
+  Ipv4AddressHelper address;
+  address.SetBase ("10.1.1.0", "255.255.255.0");
+
+  Ipv4InterfaceContainer interfaces = address.Assign (devices);
+
+  VecEvApp[0]->SetNode(nodes.Get(0));
+  VecEvApp[0]->InitLocalAdd(InetSocketAddress (interfaces.GetAddress (0), V2G_PORT));
+  nodes.Get(0)->AddApplication(VecEvApp[0]);
+  
+  cout << VecEvApp[0]->GetAppId() << endl;
+  cout << vecAggApp[0]->GetAppId() << endl;
+
+  vecAggApp[0]->SetNode(nodes.Get(1));
+  vecAggApp[0]->InitLocalAdd(InetSocketAddress (interfaces.GetAddress (1), V2G_PORT));
+  nodes.Get(1)->AddApplication(vecAggApp[0]);
+
+
+ EvChargeRequestInfo info(0,1,1.1,2.3,Seconds(60),4.6,5.7,6.6,7.7,Vector2D(1.1,2.2),Vector2D(4.1,5.2));
+  Ptr<EvChargeRequestPkt> ptr_ev_pkt = Create<EvChargeRequestPkt>("AGG_1","EV_1",info);
+  VecEvApp[0]->TestSend(Seconds (2.2),"AGG_1",ptr_ev_pkt);
+ 
+VecEvApp[0]->TestEl(Seconds(3.0));
+
+  VecEvApp[0]->SetStartTime(Seconds (2.0));
+  VecEvApp[0]->SetStopTime(Seconds (60.0));
+  vecAggApp[0]->SetStartTime(Seconds (2.0));
+  vecAggApp[0]->SetStopTime(Seconds (60.0));
+
+  Simulator::Run ();
+  Simulator::Destroy ();
+
+
+
+return 0;
+}
+
+

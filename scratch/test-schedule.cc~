@@ -1,0 +1,245 @@
+/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation;
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
+
+#include "ns3/core-module.h"
+#include "ns3/point-to-point-module.h"
+#include "ns3/network-module.h"
+#include "ns3/applications-module.h"
+#include "ns3/wifi-module.h"
+#include "ns3/csma-module.h"
+#include "ns3/internet-module.h"
+#include "ns3/v2g-packet.h"
+#include "ns3/mobility-module.h"
+#include "ns3/ev-app.h"
+#include "ns3/agg-app.h"
+#include "ns3/config-helper.h"
+#include "ns3/simulation-singleton.h"
+#include "ns3/agg-com-server.h"
+
+// Default Network Topology
+//
+//   Wifi 10.1.3.0
+//                           AP
+//  *    *    *    *    *    *
+//  |    |    |    |    |    |    10.1.1.0
+// EV_1 EV_2 EV_3 PS_1 PS_2 AGG_1 -------------- ESDM_1
+//                                point-to-point  
+//                                 
+
+using namespace ns3;
+using namespace std;
+
+NS_LOG_COMPONENT_DEFINE ("wifi-scenario");
+
+// #define DIRETORY
+#define DEBUG
+
+
+int 
+main (int argc, char *argv[])
+{
+  LogComponentEnable ("EvOm", LOG_LEVEL_INFO);
+  // LogComponentEnable ("AggOm", LOG_LEVEL_INFO);
+  // LogComponentEnable ("EvRs", LOG_LEVEL_INFO);
+  // LogComponentEnable ("AggRs", LOG_LEVEL_INFO);
+  // LogComponentEnable ("PsOm", LOG_LEVEL_INFO);
+  // LogComponentEnable ("AggApp", LOG_LEVEL_FUNCTION);
+  // // LogComponentEnable ("AggApp", LOG_LEVEL_FUNCTION);
+  // // LogComponentEnable ("EvApp", LOG_LEVEL_FUNCTION);
+  // LogComponentEnable ("AggComServer", LOG_LEVEL_INFO);
+  // LogComponentEnable ("PsComServer", LOG_LEVEL_FUNCTION);
+  // LogComponentEnable ("EvEl", LOG_LEVEL_INFO);
+  // LogComponentEnable ("PsEl", LOG_LEVEL_INFO);
+  // LogComponentEnable ("PdEl", LOG_LEVEL_FUNCTION);
+  // LogComponentEnable ("EsdmEl", LOG_LEVEL_INFO);
+  // LogComponentEnable ("ElComServer", LOG_LEVEL_FUNCTION);
+  // LogComponentEnable ("PsComServer", LOG_LEVEL_FUNCTION);
+ //LogComponentEnable ("EvMobility", LOG_LEVEL_FUNCTION);
+  // LogComponentEnable ("TraCIScenarioManager", LOG_LEVEL_INFO);
+  //LogComponentEnable ("V2gMobility",LOG_LEVEL_FUNCTION );
+  // LogComponentEnable ("SumoScenarioHelper", LOG_LEVEL_INFO);
+ // LogComponentEnable ("EvEl", LOG_LEVEL_FUNCTION);
+
+
+  double simTime = 10.0;
+  double distance = 60.0;
+  double interPacketInterval = 100;
+  string file_name = "ev3agg1ps2.xml";
+  // Command line arguments
+  CommandLine cmd;
+  cmd.AddValue("simTime", "Total duration of the simulation [s])", simTime);
+  cmd.AddValue("distance", "Distance between eNBs [m]", distance);
+  cmd.AddValue("interPacketInterval", "Inter packet interval [ms])", interPacketInterval);
+  cmd.AddValue("doc","config document",file_name);
+  cmd.Parse(argc, argv);
+
+
+
+  //ConfigHelper ch is used  to create a scene according to cofig file whose name is file_name
+  ConfigHelper ch;
+  ch.CreateScene(file_name);
+  NodeContainer esdm_nodes = ch.GetNodeContainer("ESDM");
+  NodeContainer agg_nodes = ch.GetNodeContainer("AGG");
+  NodeContainer ev_nodes = ch.GetNodeContainer("EV");
+  NodeContainer ps_nodes = ch.GetNodeContainer("PS");
+  NodeContainer pd_nodes = ch.GetNodeContainer("PD");
+  
+  Ptr<Node> esdm_node = esdm_nodes.Get (0);
+  Ptr<Node> agg_node = agg_nodes.Get (0);
+  
+/************************************config mobility*******************************/
+  // Install Mobility Model
+  Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
+
+  //inorder to make wifi communication available.we make all ps,pd and agg in one point
+  positionAlloc->Add (Vector(0, 0, 0));
+  MobilityHelper mobility;
+  mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+  mobility.SetPositionAllocator(positionAlloc);
+
+  //agg,ps,pd and esdm are still nodes
+  mobility.Install(agg_nodes);
+  mobility.Install(ps_nodes);
+  mobility.Install(pd_nodes);
+  mobility.Install(esdm_nodes);
+  
+  // init the traci-scenario-manager
+  TraCIScenarioManager::Init();
+  TraCIScenarioMgr().connectAndStartTrigger();
+  MobilityHelper evmobility;
+  evmobility.SetMobilityModel("ns3::V2gMobilityModel");
+  evmobility.SetPositionAllocator("ns3::SumoPositionAllocator");
+  evmobility.Install(ev_nodes);
+
+  
+  SumoScenarioHelper* pSumoSce = SumoScenarioHelper::Instance();
+  pSumoSce->RegisterPS("PD_1","1_10","route2",Vector2D(0.1,0.1));
+  pSumoSce->RegisterPS("PS_2","3_30","32_3",Vector2D(0.2,0.2));
+/////////////////////////////////////////////////////////////////////////////////////////
+
+
+  NodeContainer p2pNodes;
+  //agg and esdm are connected by p2p link
+  p2pNodes.Add(esdm_node);
+  p2pNodes.Add(agg_node);
+  PointToPointHelper pointToPoint;
+  pointToPoint.SetDeviceAttribute ("DataRate", StringValue ("5Mbps"));
+  pointToPoint.SetChannelAttribute ("Delay", StringValue ("2ms"));
+  NetDeviceContainer p2pDevices;
+  p2pDevices = pointToPoint.Install (p2pNodes);
+
+
+
+  // agg is designed as Ap node in the wifi 
+  NodeContainer wifiApNode = agg_node;
+  // ps,pd,ev are staNodes in  wifi 
+  NodeContainer wifiStaNodes(ev_nodes,ps_nodes,pd_nodes);
+
+  YansWifiChannelHelper channel = YansWifiChannelHelper::Default ();
+  YansWifiPhyHelper phy = YansWifiPhyHelper::Default ();
+  phy.SetChannel (channel.Create ());
+
+  WifiHelper wifi = WifiHelper::Default ();
+  wifi.SetRemoteStationManager ("ns3::AarfWifiManager");
+
+  NqosWifiMacHelper mac = NqosWifiMacHelper::Default ();
+
+  Ssid ssid = Ssid ("ns-3-ssid");
+  mac.SetType ("ns3::StaWifiMac",
+               "Ssid", SsidValue (ssid),
+               "ActiveProbing", BooleanValue (false));
+
+  NetDeviceContainer staDevices;
+  staDevices = wifi.Install (phy, mac, wifiStaNodes);
+
+  mac.SetType ("ns3::ApWifiMac",
+               "Ssid", SsidValue (ssid));
+
+  NetDeviceContainer apDevices;
+  apDevices = wifi.Install (phy, mac, wifiApNode);
+
+  InternetStackHelper stack;
+  stack.Install (esdm_node);
+  stack.Install (wifiApNode);
+  stack.Install (wifiStaNodes);
+
+  Ipv4AddressHelper address;
+
+  address.SetBase ("10.1.1.0", "255.255.255.0");
+  Ipv4InterfaceContainer p2pInterfaces;
+  p2pInterfaces = address.Assign (p2pDevices);
+  ch.RegisterAddress(esdm_node,p2pInterfaces.GetAddress(0));
+
+
+  address.SetBase ("10.1.3.0", "255.255.255.0");
+  Ipv4InterfaceContainer sta_interface = address.Assign (staDevices);
+  Ipv4InterfaceContainer ap_interface = address.Assign (apDevices);
+  ch.RegisterAddress(wifiStaNodes,sta_interface);
+  ch.RegisterAddress(wifiApNode,ap_interface);
+  // ch.RegisterAddress(p2pInterfaces,p2pNodes);
+
+  ApplicationContainer v2gApps = ch.GetAppContainer();
+  ch.InitAll();
+
+  std::vector<Ptr<EsdmApp> > VecEsdmApp = ch.GetEsdmApp();
+  std::vector<Ptr<AggApp> > VecAggApp = ch.GetAggApp();
+  std::vector<Ptr<PsApp> > VecPsApp = ch.GetPsApp();
+  std::vector<Ptr<EvApp> > VecEvApp = ch.GetEvApp();
+
+  // bool ret = true;
+  // std::vector<Ptr<EvApp> >::iterator ev_iter = VecEvApp.begin();
+  // for(;ev_iter != VecEvApp.end(); ++ ev_iter)
+  // {
+  //   if( (*ev_iter)->TestStop() == false)
+  //     ret = false;
+  // }
+  // if(ret == false)
+  //   std::cout << "fail to make ev stop" << std::endl;
+
+
+
+ EvChargeRequestInfo info(FAST_CHARGE,1,0.5,5,Minutes(10),Minutes(50),4.6,5.7,6.6,7.7,Vector2D(1.1,2.2),Vector2D(4.1,5.2));
+  // EvChargeRequestInfo info(FAST_CHARGE,1,0.05,5,Minutes(10),Minutes(50),4.6,5.7,6.6,7.7,Vector2D(1.1,2.2),Vector2D(4.1,5.2));
+   // EvChargeRequestInfo info(PARKING_MODE,1,1.1,2.3,Seconds(60),Seconds(120),4.6,5.7,6.6,7.7,Vector2D(1.1,2.2),Vector2D(4.1,5.2));
+ // EvChargeRequestInfo info(PARKING_MODE,1,1.1,2.3,Seconds(60),Seconds(120),4.6,5.7,1,1,Vector2D(1.1,2.2),Vector2D(4.1,5.2));
+ Ptr<EvChargeRequestPkt> ptr_pkt = Create<EvChargeRequestPkt>("AGG_1","EV_1",info);
+
+  v2gApps.Start(Seconds(0));
+  
+ v2gApps.Stop(Seconds(700));
+   // v2gApps.Stop(Hours(1));
+
+  // 
+  #ifdef DIRETORY
+    AggComServer* agg_server = SimulationSingleton<AggComServer>::Get();
+    Simulator::Schedule(Seconds (2.3),&AggComServer::DeliverPktDirectly,agg_server,"AGG_1",ptr_pkt);
+  #else
+    VecEvApp[0]->TestSend(Seconds (2.3),"AGG_1",ptr_pkt);
+  #endif
+
+
+  Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
+  Simulator::Stop (Seconds(700));
+   // Simulator::Stop (Hours(1));
+
+  pointToPoint.EnablePcapAll ("third");
+  phy.EnablePcap ("third", apDevices.Get (0));
+  
+
+  Simulator::Run ();
+  Simulator::Destroy ();
+  return 0;
+}

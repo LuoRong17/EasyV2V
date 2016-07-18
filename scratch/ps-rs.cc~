@@ -1,0 +1,99 @@
+#include "ps-rs.h"
+#include "ns3/log.h"
+#include <iostream>
+
+namespace ns3{
+
+NS_LOG_COMPONENT_DEFINE("PsRs");
+NS_OBJECT_ENSURE_REGISTERED(PsRs);
+
+
+TypeId PsRs::GetTypeId(void)
+{
+static TypeId tid = TypeId("v2g::PsRs");
+tid.SetParent<RsBase>();
+tid.SetGroupName("V2G");
+return tid;
+}
+
+PsRs::PsRs():m_thePowerForChargeOn(0.0),m_thePowerForChargeOff(0.0),m_thePowerForDischargeOn(0.0),m_thePowerForDischargeOff(0.0),m_thePowerValley(0.0),m_thePowerPeak(0.0){
+//initQuata
+initThreshold();
+}
+
+PsRs::~PsRs(){}
+
+void PsRs::HandleEvent(const Ptr<EventMessage>& event_msg)const
+{
+//not done
+switch(event_msg->GetType())
+{
+	case PS_EL_EVENT:
+	ProcessElEvent(DynamicCast<ElEvent>(event_msg);
+	break;
+}
+}
+
+void PsRs::HandlePacket(const Ptr<PacketMessage>& packet_msg)const{}
+
+void PsRs::initThreshold()
+{
+ThresholdInfo thresholdInfo;
+thresholdInfo.SetThreshold(1,m_thePowerForChargeOn,true);
+m_thresholdVector.push_back(thresholdInfo);
+thresholdInfo.SetThreshold(2,m_thePowerForChargeOff,false);
+m_thresholdVector.push_back(thresholdInfo);
+thresholdInfo.SetThreshold(3,m_thePowerForDischargeOn,true);
+m_thresholdVector.push_back(thresholdInfo);
+thresholdInfo.SetThreshold(4,m_thePowerForDischargeOff,false);
+m_thresholdVector.push_back(thresholdInfo);
+thresholdInfo.SetThreshold(5,m_thePowerValley,false);
+m_thresholdVector.push_back(thresholdInfo);
+thresholdInfo.SetThreshold(6,m_thePowerPeak,true);
+m_thresholdVector.push_back(thresholdInfo);
+}
+
+void PsRs::RRBSchedule()
+{
+//not done
+}
+
+void PsRs::ProcessElEvent(const Ptr<ElEvent>& event_msg)
+{
+//not done
+switch(event_msg->GetThresholdID)
+{
+	case 1://thePowerForChargeOn
+	//BatteryChargeOn
+	break;
+	case 2://thePowerForChargeOff
+	//BatteryChargeOff
+	break;
+	case 3://thePowerForDischargeOn
+	//BatteryDischargeOn
+	break;
+	case 4://thePowerForDischargeOff
+	//BatteryDischargeOff	
+	break;
+	case 5://thePowerValley
+	ProcessLocalValley();
+	break;
+	case 6://thePowerPeak
+	ProcessLocalPeak();
+	break;
+}
+}
+
+void PsRs::ProcessLocalPeak()
+{
+//not done
+}
+
+void PsRs::ProcessLocalValley()
+{
+//not done
+//Ptr<PacketMessage> packet_msg = Create<PacketMessage>();
+//almc::Send(packet_msg);
+}
+
+}//ns3
